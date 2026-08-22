@@ -10,6 +10,20 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      typeof email !== "string" ||
+      !/^\S+@\S+\.\S+$/.test(email) ||
+      typeof password !== "string" ||
+      password.length < 8
+    ) {
+      return res.status(400).json({
+        message:
+          "Name, valid email and a password of at least 8 characters are required",
+      });
+    }
+
     const existingUser = await pool.query(
       "SELECT * FROM users WHERE email=$1",
       [email]

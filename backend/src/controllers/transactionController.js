@@ -67,7 +67,7 @@ export const createTransaction = async (req, res) => {
     console.log(err.message);
 
     res.status(500).json({
-      message: err.message,
+      message: "Failed to create transaction",
     });
   }
 };

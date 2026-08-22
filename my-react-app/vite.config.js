@@ -2,10 +2,29 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
+if (!process.env.VITE_API_URL) {
+  console.warn(
+    "\n[vite] WARNING: VITE_API_URL is not set. " +
+    "The dev fallback (http://localhost:5001) will be baked into this build.\n"
+  );
+}
+
 export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: "charts", test: /[\\/]node_modules[\\/](recharts|d3-[a-z-]+|victory-[a-z-]+|internmap)[\\/]/ },
+            { name: "vendor", test: /[\\/]node_modules[\\/]/ },
+          ],
+        },
+      },
+    },
   },
   plugins: [
     react(),
@@ -40,19 +59,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,ico,json}"],
-        runtimeCaching: [
-          {
-            urlPattern: /\/api\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-            },
-          },
-        ],
       },
     }),
   ],
