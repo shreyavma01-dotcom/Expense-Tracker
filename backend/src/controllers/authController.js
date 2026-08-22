@@ -2,8 +2,7 @@ import pool from "../config/db.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from "uuid";
-
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+import { config } from "../config/env.js";
 
 
 // REGISTER
@@ -62,7 +61,7 @@ export const loginUser = async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(400).json({
-        message: "Invalid email",
+        message: "Invalid credentials",
       });
     }
 
@@ -75,7 +74,7 @@ export const loginUser = async (req, res) => {
 
     if (!isMatch) {
       return res.status(400).json({
-        message: "Invalid password",
+        message: "Invalid credentials",
       });
     }
 
@@ -84,7 +83,7 @@ export const loginUser = async (req, res) => {
         id: user.id,
         uuid: user.uuid,
       },
-      JWT_SECRET,
+      config.jwtSecret,
       {
         expiresIn: "7d",
       }

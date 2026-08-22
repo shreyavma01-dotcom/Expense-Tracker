@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend,
 } from "recharts";
@@ -6,6 +6,7 @@ import {
   LayoutDashboard, ArrowRightLeft, BarChart3, FileText, PlusCircle, Trash2, Wallet, LogOut, Pencil, Moon, Sun, User,
 } from "lucide-react";
 import axios from "axios";
+import { API_URL } from "./api.js";
 import Dashboard from "./pages/Dashboard.jsx";
 import AddTransaction from "./pages/AddTransaction.jsx";
 import Reports from "./pages/Reports.jsx";
@@ -60,8 +61,8 @@ function ExpenseTracker() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [toast, setToast] = useState(null);
 
-  const showToast = (message, type = "success") => setToast({ message, type });
-  const closeToast = () => setToast(null);
+  const showToast = useCallback((message, type = "success") => setToast({ message, type }), []);
+  const closeToast = useCallback(() => setToast(null), []);
 
   useEffect(() => {
     localStorage.setItem("theme", theme);
@@ -72,20 +73,47 @@ function ExpenseTracker() {
 
   const toggleTheme = () => setTheme((p) => (p === "light" ? "dark" : "light"));
 
-  const fetchTransactions = useCallback(async () => {
-    try {
-      setLoading(true); setError("");
-      const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5001/api/transactions", {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      setTransactions(res.data);
-    } catch (err) {
-      setError("Failed to fetch transactions");
-    } finally { setLoading(false); }
+  const loadTransactions = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    const res = await axios.get(`${API_URL}/api/transactions`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    return res.data;
   }, []);
 
-  useEffect(() => { if (isLoggedIn) fetchTransactions(); }, [isLoggedIn, fetchTransactions]);
+  const handleRequestError = useCallback((error, errorMessage, failureToast) => {
+    if (error?.response?.status === 401) {
+      localStorage.removeItem("token");
+      setIsLoggedIn(false);
+      setCurrentUser(null);
+      showToast("Session expired. Please sign in again.", "error");
+    } else {
+      setError(errorMessage);
+      if (failureToast) showToast(failureToast, "error");
+    }
+  }, [showToast]);
+
+  const fetchTransactions = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      setTransactions(await loadTransactions());
+    } catch (error) {
+      handleRequestError(error, "Failed to fetch transactions");
+    } finally {
+      setLoading(false);
+    }
+  }, [loadTransactions, handleRequestError]);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let cancelled = false;
+    loadTransactions()
+      .then((data) => { if (!cancelled) setTransactions(data); })
+      .catch((error) => { if (!cancelled) handleRequestError(error, "Failed to fetch transactions"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isLoggedIn, loadTransactions, handleRequestError]);
 
   const addTransaction = async (e) => {
     e.preventDefault();
@@ -93,13 +121,13 @@ function ExpenseTracker() {
     try {
       setLoading(true); setError("");
       const token = localStorage.getItem("token");
-      await axios.post("http://localhost:5001/api/transactions", {
+      await axios.post(`${API_URL}/api/transactions`, {
         title: description, amount: Number(amount), type: type.toLowerCase(), category, description, date,
       }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       await fetchTransactions();
       setAmount(""); setCategory(""); setDate(""); setDescription(""); setType("Expense");
       showToast("Transaction added");
-    } catch (err) { setError("Failed to add transaction"); showToast("Failed to add", "error"); }
+    } catch (error) { handleRequestError(error, "Failed to add transaction", "Failed to add"); }
     finally { setLoading(false); }
   };
 
@@ -108,13 +136,13 @@ function ExpenseTracker() {
     try {
       setLoading(true); setError("");
       const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:5001/api/transactions/${deleteTarget}`, {
+      await axios.delete(`${API_URL}/api/transactions/${deleteTarget}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       await fetchTransactions();
       showToast("Transaction deleted");
       setDeleteTarget(null);
-    } catch (err) { setError("Failed to delete"); showToast("Failed to delete", "error"); }
+    } catch (error) { handleRequestError(error, "Failed to delete", "Failed to delete"); }
     finally { setLoading(false); }
   };
 
@@ -122,23 +150,25 @@ function ExpenseTracker() {
     try {
       setLoading(true); setError("");
       const token = localStorage.getItem("token");
-      await axios.put(`http://localhost:5001/api/transactions/${editingId}`, { ...editData, amount: Number(editData.amount) }, {
+      await axios.put(`${API_URL}/api/transactions/${editingId}`, { ...editData, amount: Number(editData.amount) }, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       await fetchTransactions();
       setEditingId(null);
       showToast("Transaction updated");
-    } catch (err) { setError("Failed to update"); showToast("Failed to update", "error"); }
+    } catch (error) { handleRequestError(error, "Failed to update", "Failed to update"); }
     finally { setLoading(false); }
   };
 
   const handleLogout = async () => {
     try {
       const token = localStorage.getItem("token");
-      if (token) await axios.post("http://localhost:5001/api/auth/logout", {}, {
+      if (token) await axios.post(`${API_URL}/api/auth/logout`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
-    } catch {}
+    } catch {
+      // Best-effort server logout; local session is cleared regardless.
+    }
     localStorage.removeItem("token");
     setIsLoggedIn(false); setCurrentUser(null);
   };
@@ -173,7 +203,7 @@ function ExpenseTracker() {
 
   const registerUser = async () => {
     try {
-      await axios.post("http://localhost:5001/api/auth/register", { name: signupName, email: signupEmail, password: signupPassword });
+      await axios.post(`${API_URL}/api/auth/register`, { name: signupName, email: signupEmail, password: signupPassword });
       setShowSignup(false);
       setSignupName(""); setSignupEmail(""); setSignupPassword("");
       showToast("Account created! Sign in to continue.");
@@ -183,7 +213,7 @@ function ExpenseTracker() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post("http://localhost:5001/api/auth/login", { email: loginEmail, password: loginPassword });
+      const res = await axios.post(`${API_URL}/api/auth/login`, { email: loginEmail, password: loginPassword });
       if (res.data) {
         if (res.data.token) localStorage.setItem("token", res.data.token);
         setIsLoggedIn(true);
@@ -253,7 +283,7 @@ function ExpenseTracker() {
                 <div style={{ borderBottom: "1px solid var(--border)" }} />
                 <span style={{ position: "absolute", top: "-8px", left: "50%", transform: "translateX(-50%)", background: "var(--card)", padding: "0 10px", fontSize: "12px", color: "var(--muted-foreground)" }}>or</span>
               </div>
-              <button type="button" onClick={() => { setLoginEmail("admin@gmail.com"); setLoginPassword("123456"); }}
+              <button type="button" onClick={() => { setLoginEmail("admin@example.com"); setLoginPassword("ChangeMe123!"); }}
                 className="btn btn-secondary" style={{ height: "44px", width: "100%", display: "flex", gap: "8px" }}>
                 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--green)", display: "inline-block" }} />
                 Demo Admin Login

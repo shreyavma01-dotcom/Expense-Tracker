@@ -42,7 +42,7 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,svg,png,ico,json}"],
         runtimeCaching: [
           {
-            urlPattern: /^https?:\/\/localhost:5001\/api\/.*/i,
+            urlPattern: /\/api\/.*/i,
             handler: "NetworkFirst",
             options: {
               cacheName: "api-cache",

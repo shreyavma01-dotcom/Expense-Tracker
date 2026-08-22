@@ -1,22 +1,24 @@
 import pool from "../config/db.js";
 
-// GET ALL
+// GET ALL (scoped to a user)
 export const getTransactionsService =
-  async () => {
+  async (userId) => {
     const result = await pool.query(
       `
       SELECT *
       FROM transactions
+      WHERE user_id = $1
       ORDER BY id DESC
-      `
+      `,
+      [userId]
     );
 
     return result.rows;
   };
 
-// CREATE
+// CREATE (owned by a user)
 export const createTransactionService =
-  async (data) => {
+  async (userId, data) => {
     const {
       amount,
       type,
@@ -29,16 +31,18 @@ export const createTransactionService =
       `
       INSERT INTO transactions
       (
+        user_id,
         amount,
         type,
         category,
         description,
         date
       )
-      VALUES ($1,$2,$3,$4,$5)
+      VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING *
       `,
       [
+        userId,
         amount,
         type,
         category,
@@ -50,21 +54,21 @@ export const createTransactionService =
     return result.rows[0];
   };
 
-// DELETE
+// DELETE (only if owned by the user)
 export const deleteTransactionService =
-  async (id) => {
+  async (userId, id) => {
     await pool.query(
       `
       DELETE FROM transactions
-      WHERE id = $1
+      WHERE user_id = $1 AND id = $2
       `,
-      [id]
+      [userId, id]
     );
   };
 
-// UPDATE
+// UPDATE (only if owned by the user)
 export const updateTransactionService =
-  async (id, data) => {
+  async (userId, id, data) => {
     const {
       amount,
       type,
@@ -82,7 +86,7 @@ export const updateTransactionService =
         category = $3,
         description = $4,
         date = $5
-      WHERE id = $6
+      WHERE user_id = $6 AND id = $7
       RETURNING *
       `,
       [
@@ -91,6 +95,7 @@ export const updateTransactionService =
         category,
         description,
         date,
+        userId,
         id,
       ]
     );

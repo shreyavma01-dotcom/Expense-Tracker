@@ -1,4 +1,4 @@
-import { PlusCircle, ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 
 export default function AddTransaction({ mobile, type, setType, amount, setAmount, category, setCategory, date, setDate, description, setDescription, addTransaction, inp }) {
   const quickAmounts = [100, 500, 1000, 5000];

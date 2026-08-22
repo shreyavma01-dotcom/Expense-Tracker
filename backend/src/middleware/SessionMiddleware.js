@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import pool from "../config/db.js";
+import { config } from "../config/env.js";
 
 export const authMiddleware = async (
   req,
@@ -16,16 +17,21 @@ export const authMiddleware = async (
       });
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "your_secret_key"
-    );
+    let decoded;
+    try {
+      decoded = jwt.verify(token, config.jwtSecret);
+    } catch {
+      return res.status(401).json({
+        message: "Invalid or expired token",
+      });
+    }
 
-    // check session exists
+    // check session exists and has not expired
     const session = await pool.query(
       `
       SELECT * FROM sessions
       WHERE token=$1
+        AND (expires_at IS NULL OR expires_at > NOW())
       `,
       [token]
     );
